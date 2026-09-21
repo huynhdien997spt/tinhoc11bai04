@@ -972,7 +972,7 @@ function awardXP(key, baseXP, label, opts={}){
   const growth = attempt===1
     ? 'Đúng ngay lần đầu: nhận 100% XP.'
     : `Bạn đã điều chỉnh sau ${attempt-1} lần thử — đó chính là tư duy phát triển. Nhận ${Math.round(rate*100)}% XP.`;
-  showXPToast(`⚡ +${pts} XP · ${label}`, growth, false);
+  showXPToast(`⚡ +${pts} XP · ${label}`, growth, false); 
   return pts;
 }
 
