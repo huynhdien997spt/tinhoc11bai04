@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -792,7 +793,68 @@ function renderTeacherStepGrid(){
 // ============================================================
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbwSrjiFedoXGf0w2EUwkt81n1Gu4_GJIZbVLP7bSGZ9dm8XldaCavUtm9BIAZnGJ9RM/exec';
+  'https://script.google.com/macros/s/AKfycbzuR1fP8MVCQSGIm2vW2aIzPwWuW_buB3XbIxVKzwzYtFoL95etIlUKSmfOCB9HyXBFpw/exec';
+
+/* ============================================================
+   LỚP KẾT NỐI GOOGLE APPS SCRIPT
+   ============================================================ */
+const GAS_AVAILABLE = !!API_URL && API_URL.indexOf('YOUR_DEPLOYMENT_ID') === -1;
+let teacherToken = '';
+
+// Mỗi trình duyệt có 1 mã định danh riêng, dùng để khoá tạm khi nhập sai mật khẩu nhiều lần
+function browserId(){
+  try{
+    let id = localStorage.getItem('bai4_browser_id');
+    if(!id){
+      id = 'b_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('bai4_browser_id', id);
+    }
+    return id;
+  }catch(e){
+    return 'nb_' + Date.now();
+  }
+}
+
+// Gọi hàm phía Apps Script: gasCall('tenHam', [thamSo1, thamSo2], onSuccess, onError)
+function gasCall(fn, args, onSuccess, onError){
+  if(!GAS_AVAILABLE){
+    onError && onError(new Error('API_URL chưa được cấu hình.'));
+    return;
+  }
+  fetch(API_URL, {
+    method: 'POST',
+    // text/plain để trình duyệt KHÔNG gửi preflight OPTIONS (Apps Script không xử lý OPTIONS)
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn, args })
+  })
+  .then(r => r.json())
+  .then(data => onSuccess && onSuccess(data))
+  .catch(err => onError && onError(err));
+}
+
+// Gói dữ liệu học sinh hiện tại thành 1 payload để gửi lên Sheet
+function buildSubmissionPayload(status){
+  return {
+    name: studentName,
+    className: studentClass,
+    status: status,
+    quizScore: window.__lastQuizScore,
+    xp: xpState.total,
+    confidence: exitTicket.confidence,
+    strong: exitTicket.strong,
+    practice: exitTicket.practice,
+    reflection: exitTicket.reflection,
+    browserId: browserId()
+  };
+}
+
+function setGasStatus(text, cls){
+  const el = document.getElementById('gasSyncStatus');
+  if(!el) return;
+  el.textContent = text;
+  el.className = 'gas-status ' + (cls || '');
+}
+
 function saveCheckpoint(status='QUIZ'){
   if(teacherMode || !GAS_AVAILABLE || !studentName || studentName==='GIÁO VIÊN') return;
   gasCall('saveStudentResult',[buildSubmissionPayload(status)],()=>{},()=>{});
