@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bài 4. Bên trong máy tính — Tin học 11 · Google Apps Script</title>
+<title>Bài 4. Bên trong máy tính — Tin học 11</title>
 <style>
 :root{
   --navy:#0B1220; --navy2:#111C33; --blue:#2563EB; --blue-d:#1D4ED8; --cyan:#06B6D4;
@@ -232,6 +231,8 @@ section{padding:30px 0 54px;}
 .quiz-explain.show{display:block;}
 .mini-bins{display:flex; gap:14px; margin-top:10px;}
 .mini-bin{flex:1; border:2px dashed #C6D3E8; border-radius:12px; min-height:80px; padding:10px; text-align:center; font-size:12px; font-weight:700; color:var(--navy2);}
+.mini-bin.correct{border-color:var(--green);background:#F0FDF4;}
+.mini-bin.wrong,.bin.wrong{animation:shake .4s;border-color:var(--red);background:#FEF2F2;}
 .mini-tray{display:flex; gap:10px; margin-top:10px; justify-content:center;}
 .score-box{text-align:center; padding:34px 20px;}
 .takeaway-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin:20px 0; text-align:left;}
@@ -791,72 +792,47 @@ function renderTeacherStepGrid(){
 // ============================================================
 // GOOGLE APPS SCRIPT BACKEND — WEBSITE ĐANG CHẠY TRÊN GITHUB
 // ============================================================
-
-const API_URL =
-  'https://script.google.com/macros/s/AKfycbzuR1fP8MVCQSGIm2vW2aIzPwWuW_buB3XbIxVKzwzYtFoL95etIlUKSmfOCB9HyXBFpw/exec';
-
-/* ============================================================
-   LỚP KẾT NỐI GOOGLE APPS SCRIPT
-   ============================================================ */
-const GAS_AVAILABLE = !!API_URL && API_URL.indexOf('YOUR_DEPLOYMENT_ID') === -1;
+const API_URL = 'https://script.google.com/macros/s/AKfycbwSrjiFedoXGf0w2EUwkt81n1Gu4_GJIZbVLP7bSGZ9dm8XldaCavUtm9BIAZnGJ9RM/exec';
+const GAS_AVAILABLE = /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(API_URL);
+let sessionId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('S-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
 let teacherToken = '';
-
-// Mỗi trình duyệt có 1 mã định danh riêng, dùng để khoá tạm khi nhập sai mật khẩu nhiều lần
+const gasPending = new Map();
 function browserId(){
-  try{
-    let id = localStorage.getItem('bai4_browser_id');
-    if(!id){
-      id = 'b_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem('bai4_browser_id', id);
-    }
-    return id;
-  }catch(e){
-    return 'nb_' + Date.now();
-  }
+  let id='';
+  try{ id=localStorage.getItem('th11_b4_browser_id')||''; if(!id){ id='B-'+Date.now()+'-'+Math.random().toString(36).slice(2,12); localStorage.setItem('th11_b4_browser_id',id); } }
+  catch(e){ id='B-'+Math.random().toString(36).slice(2,12); }
+  return id;
 }
-
-// Gọi hàm phía Apps Script: gasCall('tenHam', [thamSo1, thamSo2], onSuccess, onError)
-function gasCall(fn, args, onSuccess, onError){
-  if(!GAS_AVAILABLE){
-    onError && onError(new Error('API_URL chưa được cấu hình.'));
-    return;
-  }
-  fetch(API_URL, {
-    method: 'POST',
-    // text/plain để trình duyệt KHÔNG gửi preflight OPTIONS (Apps Script không xử lý OPTIONS)
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ fn, args })
-  })
-  .then(r => r.json())
-  .then(data => onSuccess && onSuccess(data))
-  .catch(err => onError && onError(err));
+window.addEventListener('message',function(event){
+  const msg=event.data;
+  if(!msg || msg.source!=='TH11_B4_GAS') return;
+  const pending=gasPending.get(msg.requestId);
+  if(!pending) return;
+  if(event.source!==pending.iframe.contentWindow) return;
+  clearTimeout(pending.timer); gasPending.delete(msg.requestId);
+  try{ pending.iframe.remove(); }catch(e){}
+  if(msg.ok) pending.onOk(msg.result);
+  else pending.onFail(new Error(msg.error||'Google Apps Script trả về lỗi.'));
+});
+function gasCall(fn,args=[],onOk=()=>{},onFail=()=>{}){
+  if(!GAS_AVAILABLE){ onFail(new Error('API Google Apps Script chưa được cấu hình bằng URL /exec hợp lệ.')); return; }
+  const requestId='RPC-'+Date.now()+'-'+Math.random().toString(36).slice(2,10);
+  const iframe=document.createElement('iframe'); iframe.name='gas_iframe_'+requestId; iframe.style.display='none'; document.body.appendChild(iframe);
+  const form=document.createElement('form'); form.method='POST'; form.action=API_URL; form.target=iframe.name; form.style.display='none';
+  const input=document.createElement('input'); input.type='hidden'; input.name='rpc'; input.value=JSON.stringify({id:requestId,fn,args,origin:window.location.origin}); form.appendChild(input); document.body.appendChild(form);
+  const timer=setTimeout(()=>{ const item=gasPending.get(requestId); if(!item)return; gasPending.delete(requestId); try{iframe.remove();}catch(e){} item.onFail(new Error('Google Apps Script không phản hồi sau 20 giây.')); },20000);
+  gasPending.set(requestId,{onOk,onFail,iframe,timer});
+  try{ form.submit(); }catch(err){ clearTimeout(timer); gasPending.delete(requestId); try{iframe.remove();}catch(e){} onFail(err); }
+  form.remove();
 }
-
-// Gói dữ liệu học sinh hiện tại thành 1 payload để gửi lên Sheet
-function buildSubmissionPayload(status){
-  return {
-    name: studentName,
-    className: studentClass,
-    status: status,
-    quizScore: window.__lastQuizScore,
-    xp: xpState.total,
-    confidence: exitTicket.confidence,
-    strong: exitTicket.strong,
-    practice: exitTicket.practice,
-    reflection: exitTicket.reflection,
-    browserId: browserId()
-  };
+function setGasStatus(text,cls=''){ const el=document.getElementById('gasSyncStatus'); if(!el)return; el.className='gas-status '+cls; el.textContent=text; }
+function lessonElapsedSeconds(){ return Math.max(0,45*60-lessonSeconds); }
+function buildSubmissionPayload(status='IN_PROGRESS'){
+  const doneCount=stepDone.filter(Boolean).length;
+  return {sessionId,status,studentName,studentClass,progress:Math.round(doneCount/TOTAL_STEPS*100),currentTask:STEP_NAMES[currentStep]||'',quizScore:window.__lastQuizScore??'',xp:xpState.total,confidence:exitTicket.confidence||'',strong:exitTicket.strong||'',practice:exitTicket.practice||'',reflection:exitTicket.reflection||'',elapsedSeconds:lessonElapsedSeconds(),completedSteps:doneCount+'/'+TOTAL_STEPS,xpHistory:xpState.history,submittedAt:new Date().toISOString()};
 }
-
-function setGasStatus(text, cls){
-  const el = document.getElementById('gasSyncStatus');
-  if(!el) return;
-  el.textContent = text;
-  el.className = 'gas-status ' + (cls || '');
-}
-
-function saveCheckpoint(status='QUIZ'){
-  if(teacherMode || !GAS_AVAILABLE || !studentName || studentName==='GIÁO VIÊN') return;
+function saveCheckpoint(status='IN_PROGRESS'){
+  if(teacherMode || !studentName || studentName==='GIÁO VIÊN') return;
   gasCall('saveStudentResult',[buildSubmissionPayload(status)],()=>{},()=>{});
 }
 
@@ -1061,6 +1037,7 @@ function markStepDone(i){
     const cBtn=document.getElementById('continueBtn');
     cBtn.classList.remove('ready'); void cBtn.offsetWidth; cBtn.classList.add('ready');
   }
+  if(i<=6) saveCheckpoint('IN_PROGRESS');
 }
 document.getElementById('continueBtn').addEventListener('click', ()=>{
   if(teacherMode){
@@ -1087,7 +1064,11 @@ document.querySelectorAll('.task-pill').forEach(p=>{
 });
 
 document.getElementById('teacherModeBtn').addEventListener('click',()=>{
-  if(teacherMode){ setTeacherMode(false); return; }
+  if(teacherMode){
+    if(studentName==='GIÁO VIÊN'){ location.reload(); return; }
+    setTeacherMode(false);
+    return;
+  }
   openTeacherPassword(false);
 });
 document.getElementById('teacherExitBtn').addEventListener('click',()=>{
@@ -1180,18 +1161,24 @@ function makeDraggable(item, onDrop){
       clone.style.left = (ev.clientX-offsetX)+'px';
       clone.style.top = (ev.clientY-offsetY)+'px';
     }
-    function up(ev){
+    function cleanup(){
       document.removeEventListener('pointermove',move);
       document.removeEventListener('pointerup',up);
+      document.removeEventListener('pointercancel',cancel);
+      try{ clone.remove(); }catch(e){}
+      item.style.visibility='visible';
+    }
+    function up(ev){
       clone.style.display='none';
       const target = document.elementFromPoint(ev.clientX,ev.clientY);
-      clone.remove();
-      item.style.visibility='visible';
-      const zone = target ? target.closest('.drop-zone,[data-zone]') : null;
+      const zone = target ? target.closest('.drop-zone,[data-zone],.mini-bin') : null;
+      cleanup();
       onDrop(zone,item);
     }
+    function cancel(){ cleanup(); }
     document.addEventListener('pointermove',move);
     document.addEventListener('pointerup',up);
+    document.addEventListener('pointercancel',cancel);
   });
 }
 
@@ -1817,7 +1804,9 @@ function renderQuiz(){
           if(!zone || !zone.classList.contains('mini-bin')) return;
           const ii = parseInt(item.dataset.ii); const it = q.items[ii];
           if(zone.dataset.bin === it.bin){
+            if(placedArr[ii]) return;
             item.classList.add('used'); placedArr[ii]=true;
+            zone.classList.add('correct');
             zone.insertAdjacentHTML('beforeend', `<div style="margin-top:6px; background:#F0FDF4; border:1px solid #16A34A; border-radius:6px; padding:3px 6px;">${it.label}</div>`);
             placedCount++;
             if(placedCount===q.items.length) userAnswers[i]=true;
