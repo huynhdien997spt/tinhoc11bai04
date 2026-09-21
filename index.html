@@ -792,7 +792,7 @@ function renderTeacherStepGrid(){
 // ============================================================
 // GOOGLE APPS SCRIPT BACKEND — WEBSITE ĐANG CHẠY TRÊN GITHUB
 // ============================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbwSrjiFedoXGf0w2EUwkt81n1Gu4_GJIZbVLP7bSGZ9dm8XldaCavUtm9BIAZnGJ9RM/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzuR1fP8MVCQSGIm2vW2aIzPwWuW_buB3XbIxVKzwzYtFoL95etIlUKSmfOCB9HyXBFpw/exec';
 const GAS_AVAILABLE = /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(API_URL);
 let sessionId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('S-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
 let teacherToken = '';
