@@ -1187,7 +1187,7 @@ function makeDraggable(item, onDrop){
       const target = document.elementFromPoint(ev.clientX,ev.clientY);
       clone.remove();
       item.style.visibility='visible';
-      const zone = target ? ? target.closest('.drop-zone,[data-zone],.mini-bin'): null;
+      const zone = target ? target.closest('.drop-zone,[data-zone]') : null;
       onDrop(zone,item);
     }
     document.addEventListener('pointermove',move);
