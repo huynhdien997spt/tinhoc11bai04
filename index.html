@@ -792,7 +792,7 @@ function renderTeacherStepGrid(){
 // ============================================================
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbxUzR_0CpLqJCJeC9Kh-acQN_T7lPMZRVv-yZ-VFej-fZqkPpAsSyR9inXbDwHsN5OL/exec';
+  'https://script.google.com/macros/s/AKfycbwSrjiFedoXGf0w2EUwkt81n1Gu4_GJIZbVLP7bSGZ9dm8XldaCavUtm9BIAZnGJ9RM/exec';
 function saveCheckpoint(status='QUIZ'){
   if(teacherMode || !GAS_AVAILABLE || !studentName || studentName==='GIÁO VIÊN') return;
   gasCall('saveStudentResult',[buildSubmissionPayload(status)],()=>{},()=>{});
