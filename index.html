@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -792,48 +793,48 @@ function renderTeacherStepGrid(){
 // ============================================================
 // GOOGLE APPS SCRIPT BACKEND — WEBSITE ĐANG CHẠY TRÊN GITHUB
 // ============================================================
-const API_URL =
-  'https://script.google.com/macros/s/AKfycbzuR1fP8MVCQSGIm2vW2aIzPwWuW_buB3XbIxVKzwzYtFoL95etIlUKSmfOCB9HyXBFpw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzuR1fP8MVCQSGIm2vW2aIzPwWuW_buB3XbIxVKzwzYtFoL95etIlUKSmfOCB9HyXBFpw/exec';
 const GAS_AVAILABLE = /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(API_URL);
-let sessionId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('S-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
 let teacherToken = '';
-const gasPending = new Map();
+
+// Mỗi trình duyệt có 1 mã định danh riêng, dùng để khoá tạm khi nhập sai mật khẩu nhiều lần
 function browserId(){
   let id='';
   try{ id=localStorage.getItem('th11_b4_browser_id')||''; if(!id){ id='B-'+Date.now()+'-'+Math.random().toString(36).slice(2,12); localStorage.setItem('th11_b4_browser_id',id); } }
   catch(e){ id='B-'+Math.random().toString(36).slice(2,12); }
   return id;
 }
-window.addEventListener('message',function(event){
-  const msg=event.data;
-  if(!msg || msg.source!=='TH11_B4_GAS') return;
-  const pending=gasPending.get(msg.requestId);
-  if(!pending) return;
-  if(event.source!==pending.iframe.contentWindow) return;
-  clearTimeout(pending.timer); gasPending.delete(msg.requestId);
-  try{ pending.iframe.remove(); }catch(e){}
-  if(msg.ok) pending.onOk(msg.result);
-  else pending.onFail(new Error(msg.error||'Google Apps Script trả về lỗi.'));
-});
+
+// Gọi hàm phía Apps Script bằng fetch POST thường (khớp với Code.gs trả JSON qua ContentService)
 function gasCall(fn,args=[],onOk=()=>{},onFail=()=>{}){
   if(!GAS_AVAILABLE){ onFail(new Error('API Google Apps Script chưa được cấu hình bằng URL /exec hợp lệ.')); return; }
-  const requestId='RPC-'+Date.now()+'-'+Math.random().toString(36).slice(2,10);
-  const iframe=document.createElement('iframe'); iframe.name='gas_iframe_'+requestId; iframe.style.display='none'; document.body.appendChild(iframe);
-  const form=document.createElement('form'); form.method='POST'; form.action=API_URL; form.target=iframe.name; form.style.display='none';
-  const input=document.createElement('input'); input.type='hidden'; input.name='rpc'; input.value=JSON.stringify({id:requestId,fn,args,origin:window.location.origin}); form.appendChild(input); document.body.appendChild(form);
-  const timer=setTimeout(()=>{ const item=gasPending.get(requestId); if(!item)return; gasPending.delete(requestId); try{iframe.remove();}catch(e){} item.onFail(new Error('Google Apps Script không phản hồi sau 20 giây.')); },20000);
-  gasPending.set(requestId,{onOk,onFail,iframe,timer});
-  try{ form.submit(); }catch(err){ clearTimeout(timer); gasPending.delete(requestId); try{iframe.remove();}catch(e){} onFail(err); }
-  form.remove();
+  fetch(API_URL, {
+    method:'POST',
+    // text/plain để trình duyệt KHÔNG gửi preflight OPTIONS (Apps Script không xử lý OPTIONS)
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn, args })
+  })
+  .then(r=>r.json())
+  .then(data=>onOk(data))
+  .catch(err=>onFail(err));
 }
 function setGasStatus(text,cls=''){ const el=document.getElementById('gasSyncStatus'); if(!el)return; el.className='gas-status '+cls; el.textContent=text; }
-function lessonElapsedSeconds(){ return Math.max(0,45*60-lessonSeconds); }
-function buildSubmissionPayload(status='IN_PROGRESS'){
-  const doneCount=stepDone.filter(Boolean).length;
-  return {sessionId,status,studentName,studentClass,progress:Math.round(doneCount/TOTAL_STEPS*100),currentTask:STEP_NAMES[currentStep]||'',quizScore:window.__lastQuizScore??'',xp:xpState.total,confidence:exitTicket.confidence||'',strong:exitTicket.strong||'',practice:exitTicket.practice||'',reflection:exitTicket.reflection||'',elapsedSeconds:lessonElapsedSeconds(),completedSteps:doneCount+'/'+TOTAL_STEPS,xpHistory:xpState.history,submittedAt:new Date().toISOString()};
+function buildSubmissionPayload(status='QUIZ'){
+  return {
+    name: studentName,
+    className: studentClass,
+    status: status,
+    quizScore: window.__lastQuizScore,
+    xp: xpState.total,
+    confidence: exitTicket.confidence,
+    strong: exitTicket.strong,
+    practice: exitTicket.practice,
+    reflection: exitTicket.reflection,
+    browserId: browserId()
+  };
 }
-function saveCheckpoint(status='IN_PROGRESS'){
-  if(teacherMode || !studentName || studentName==='GIÁO VIÊN') return;
+function saveCheckpoint(status='QUIZ'){
+  if(teacherMode || !GAS_AVAILABLE || !studentName || studentName==='GIÁO VIÊN') return;
   gasCall('saveStudentResult',[buildSubmissionPayload(status)],()=>{},()=>{});
 }
 
@@ -870,7 +871,7 @@ function verifyTeacherPassword(){
   document.getElementById('teacherLockConfirm').disabled=true;
   gasCall('verifyTeacherPassword',[pass,browserId()],res=>{
     document.getElementById('teacherLockConfirm').disabled=false;
-    if(res && res.ok){
+    if(res && (res.ok || res.success)){
       teacherToken=res.token||'';
       closeTeacherPassword();
       setTeacherMode(true, teacherPasswordTargetFromLanding);
@@ -1171,8 +1172,12 @@ function makeDraggable(item, onDrop){
     }
     function up(ev){
       clone.style.display='none';
-      const target = document.elementFromPoint(ev.clientX,ev.clientY);
-      const zone = target ? target.closest('.drop-zone,[data-zone],.mini-bin') : null;
+      let zone = null;
+      const stack = document.elementsFromPoint(ev.clientX,ev.clientY);
+      for(const el of stack){
+        const z = el.closest('.drop-zone,[data-zone],.mini-bin');
+        if(z){ zone = z; break; }
+      }
       cleanup();
       onDrop(zone,item);
     }
@@ -1767,20 +1772,8 @@ const quizData = [
  {id:5,type:'mcq',prompt:'Thiết bị nào sau đây thuộc bộ nhớ ngoài?',options:['RAM','ROM','SSD'],correct:2,explain:'SSD là thiết bị lưu trữ ngoài, dữ liệu lâu dài.'},
  {id:6,type:'fill',prompt:'1 + 1 = ? (nhị phân)',correct:'10',explain:'1+1 trong nhị phân bằng 10 (0, nhớ 1).'},
  {id:7,type:'mcq',prompt:'Kết quả của 1 XOR 0 là?',options:['0','1'],correct:1,explain:'XOR = 1 khi hai đầu vào khác nhau.'},
-{
-  id:8,
-  type:'mcq',
-  prompt:'Cặp mô tả nào đúng về RAM và ROM?',
-  options:[
-    'RAM: lưu tạm thời — ROM: lưu lâu dài',
-    'RAM: lưu lâu dài — ROM: lưu tạm thời',
-    'RAM: bộ nhớ ngoài — ROM: bộ xử lí',
-    'RAM: xử lí dữ liệu — ROM: tính toán'
-  ],
-  correct:0,
-  explain:'RAM lưu dữ liệu tạm thời trong quá trình máy tính hoạt động; ROM lưu dữ liệu lâu dài.'
-}, 
-  {id:9,type:'simmini',prompt:'Chỉnh công tắc x, y sao cho đèn cổng AND sáng, rồi bấm Xác nhận.',explain:'Đèn AND chỉ sáng khi cả x và y đều bằng 1.'},
+ {id:8,type:'dragmini',prompt:'Kéo thẻ vào đúng nhóm bộ nhớ.',items:[{label:'Lưu tạm thời',bin:'ram'},{label:'Lưu lâu dài',bin:'rom'}],explain:'RAM lưu tạm thời, ROM lưu lâu dài.'},
+ {id:9,type:'simmini',prompt:'Chỉnh công tắc x, y sao cho đèn cổng AND sáng, rồi bấm Xác nhận.',explain:'Đèn AND chỉ sáng khi cả x và y đều bằng 1.'},
  {id:10,type:'mcq',prompt:'Trong mạch cộng 2 bit, công thức nào đúng?',options:['z = x AND y ,  t = x XOR y','z = x XOR y ,  t = x AND y','z = x OR y ,  t = x AND y'],correct:0,explain:'z (số nhớ) = AND(x,y); t (kết quả) = XOR(x,y).'}
 ];
 const userAnswers = new Array(quizData.length).fill(null);
@@ -1998,7 +1991,7 @@ function loadTeacherResults(){
     st.textContent='';
     document.getElementById('teacherDataRefresh').style.display='inline-block';
     box.classList.add('show');
-    const rows=(res&&res.rows)||[];
+    const rows=(res&&(res.rows||res.data))||[];
     if(!rows.length){ box.innerHTML='<div class="teacher-data-empty">Chưa có bài nộp nào.</div>'; return; }
     box.innerHTML=`<table><thead><tr><th>Thời gian</th><th>Học sinh</th><th>Lớp</th><th>Quiz</th><th>XP</th><th>Tự tin</th><th>Muốn luyện thêm</th><th>Trạng thái</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeCell(r.time)}</td><td><b>${escapeCell(r.name)}</b></td><td>${escapeCell(r.className)}</td><td>${escapeCell(r.quizScore)}</td><td>${escapeCell(r.xp)}</td><td>${escapeCell(r.confidence)}</td><td>${escapeCell(r.practice)}</td><td>${escapeCell(r.status)}</td></tr>`).join('')}</tbody></table>`;
   },e=>{ st.textContent='Không tải được dữ liệu. Phiên Teacher Mode có thể đã hết hạn.'; });
