@@ -787,34 +787,12 @@ function renderTeacherStepGrid(){
   grid.querySelectorAll('[data-teacher-step]').forEach(btn=>btn.addEventListener('click',()=>goToStep(Number(btn.dataset.teacherStep))));
 }
 
-// ===== GOOGLE APPS SCRIPT BACKEND =====
-const GAS_AVAILABLE = typeof google !== 'undefined' && google.script && google.script.run;
-let sessionId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('S-'+Date.now()+'-'+Math.random().toString(36).slice(2,10));
-let teacherToken = '';
-function browserId(){
-  let id='';
-  try{ id=localStorage.getItem('th11_b4_browser_id')||''; if(!id){ id='B-'+Date.now()+'-'+Math.random().toString(36).slice(2,12); localStorage.setItem('th11_b4_browser_id',id); } }catch(e){ id='B-'+Math.random().toString(36).slice(2,12); }
-  return id;
-}
-function gasCall(fn, args=[], onOk=()=>{}, onFail=()=>{}){
-  if(!GAS_AVAILABLE){ onFail(new Error('Trang này cần được chạy qua Google Apps Script Web App để đồng bộ dữ liệu.')); return; }
-  let runner=google.script.run.withSuccessHandler(onOk).withFailureHandler(onFail);
-  runner[fn](...args);
-}
-function setGasStatus(text, cls=''){
-  const el=document.getElementById('gasSyncStatus'); if(!el) return;
-  el.className='gas-status '+cls; el.textContent=text;
-}
-function lessonElapsedSeconds(){ return Math.max(0,45*60-lessonSeconds); }
-function buildSubmissionPayload(status='COMPLETE'){
-  return {
-    sessionId, status, studentName, studentClass,
-    quizScore: window.__lastQuizScore ?? '', xp: xpState.total,
-    confidence: exitTicket.confidence||'', strong: exitTicket.strong||'', practice: exitTicket.practice||'', reflection: exitTicket.reflection||'',
-    elapsedSeconds: lessonElapsedSeconds(), completedSteps: stepDone.filter(Boolean).length+'/'+TOTAL_STEPS,
-    xpHistory: xpState.history, userAgent: navigator.userAgent, submittedAt: new Date().toISOString()
-  };
-}
+// ============================================================
+// GOOGLE APPS SCRIPT BACKEND — WEBSITE ĐANG CHẠY TRÊN GITHUB
+// ============================================================
+
+const API_URL =
+  'https://script.google.com/macros/s/AKfycbxUzR_0CpLqJCJeC9Kh-acQN_T7lPMZRVv-yZ-VFej-fZqkPpAsSyR9inXbDwHsN5OL/exec';
 function saveCheckpoint(status='QUIZ'){
   if(teacherMode || !GAS_AVAILABLE || !studentName || studentName==='GIÁO VIÊN') return;
   gasCall('saveStudentResult',[buildSubmissionPayload(status)],()=>{},()=>{});
